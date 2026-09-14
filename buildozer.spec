@@ -5,7 +5,7 @@ package.domain = com.survivorrush
 source.dir = .
 source.include_exts = py,png,jpg,jpeg,kv,atlas,wav,txt
 version = 0.1
-requirements = python3,sdl2,sdl2_image,sdl2_mixer,sdl2_ttf,pygame-ce==2.5.7,cython
+requirements = python3,pygame-ce==2.5.7
 orientation = landscape
 fullscreen = 1
 android.api = 36
@@ -14,6 +14,7 @@ android.ndk = 28c
 android.archs = arm64-v8a
 android.accept_sdk_license = True
 p4a.local_recipes = ./p4a-recipes
+p4a.branch = master
 
 [buildozer]
 log_level = 2
