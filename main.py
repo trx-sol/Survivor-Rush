@@ -1,6 +1,13 @@
-
 import math
 import random
+import os
+
+# Prevent SDL2 from synthesizing a MOUSEBUTTONDOWN for every touch on Android.
+# Without this, a single tap fires both FINGERDOWN and MOUSEBUTTONDOWN,
+# double-triggering menu/shop actions (e.g. a shop purchase running twice).
+os.environ["SDL_TOUCH_MOUSE_EVENTS"] = "0"
+os.environ["SDL_MOUSE_TOUCH_EVENTS"] = "0"
+
 import pygame
 
 # Survivor Rush V5
