@@ -10,7 +10,7 @@ class Pygame2Recipe(CompiledComponentsPythonRecipe):
     Some pygame-ce functionality may be untested on Android.
     """
 
-    version = "2.4.0"
+    version = "2.5.7"
     url = "https://github.com/pygame-community/pygame-ce/archive/{version}.tar.gz"
 
     site_packages_name = "pygame-ce"
@@ -52,6 +52,11 @@ class Pygame2Recipe(CompiledComponentsPythonRecipe):
             for include_dir in sdl2_mixer_recipe.get_include_dirs(arch):
                 sdl_mixer_includes += f"-I{include_dir} "
 
+            sdl_image_includes = ""
+            sdl2_image_recipe = self.get_recipe("sdl2_image", self.ctx)
+            for include_dir in sdl2_image_recipe.get_include_dirs(arch):
+                sdl_image_includes += f"-I{include_dir} "
+
             setup_file = setup_template.format(
                 sdl_includes=(
                     " -I"
@@ -67,8 +72,7 @@ class Pygame2Recipe(CompiledComponentsPythonRecipe):
                 ),
                 sdl_ttf_includes="-I"
                 + join(self.ctx.bootstrap.build_dir, "jni", "SDL2_ttf"),
-                sdl_image_includes="-I"
-                + join(self.ctx.bootstrap.build_dir, "jni", "SDL2_image","include"),
+                sdl_image_includes=sdl_image_includes,
                 sdl_mixer_includes=sdl_mixer_includes,
                 jpeg_includes="-I" + jpeg_inc_dir,
                 png_includes="-I" + png_inc_dir,
