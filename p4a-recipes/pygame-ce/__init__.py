@@ -22,6 +22,7 @@ class Pygame2Recipe(CompiledComponentsPythonRecipe):
         "sdl2_mixer",
         "sdl2_ttf",
         "setuptools",
+        "cython",
         "jpeg",
         "png",
     ]
