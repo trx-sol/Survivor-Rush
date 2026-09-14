@@ -68,7 +68,7 @@ class Pygame2Recipe(CompiledComponentsPythonRecipe):
                 sdl_ttf_includes="-I"
                 + join(self.ctx.bootstrap.build_dir, "jni", "SDL2_ttf"),
                 sdl_image_includes="-I"
-                + join(self.ctx.bootstrap.build_dir, "jni", "SDL2_image"),
+                + join(self.ctx.bootstrap.build_dir, "jni", "SDL2_image","include"),
                 sdl_mixer_includes=sdl_mixer_includes,
                 jpeg_includes="-I" + jpeg_inc_dir,
                 png_includes="-I" + png_inc_dir,
