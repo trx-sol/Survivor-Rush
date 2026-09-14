@@ -5,7 +5,7 @@ package.domain = com.survivorrush
 source.dir = .
 source.include_exts = py,png,jpg,jpeg,kv,atlas,wav,txt
 version = 0.1
-requirements = python3==3.12.14,hostpython3==3.12.14,pygame-ce==2.5.7
+requirements = python3==3.11.9,hostpython3==3.11.9,pygame-ce==2.5.7
 orientation = landscape
 fullscreen = 1
 android.api = 36
