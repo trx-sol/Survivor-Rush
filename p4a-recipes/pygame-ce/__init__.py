@@ -1,13 +1,18 @@
-# game/p4a-recipes/pygame-ce/__init__.py
 from os.path import join
 
 from pythonforandroid.recipe import CompiledComponentsPythonRecipe
 from pythonforandroid.toolchain import current_directory
 
 
-class PygameCeRecipe(CompiledComponentsPythonRecipe):
+class Pygame2Recipe(CompiledComponentsPythonRecipe):
+    """
+    Recipe to build apps based on SDL2-based pygame-ce.
+    Some pygame-ce functionality may be untested on Android.
+    """
+
     version = "2.4.0"
-    url = "https://github.com/pygame-community/pygame-ce/archive/refs/tags/{version}.tar.gz"
+    url = "https://github.com/pygame-community/pygame-ce/archive/{version}.tar.gz"
+
     site_packages_name = "pygame-ce"
     name = "pygame-ce"
 
@@ -21,13 +26,17 @@ class PygameCeRecipe(CompiledComponentsPythonRecipe):
         "png",
     ]
 
-    call_hostpython_via_targetpython = False  # Due to setuptools
+    call_hostpython_via_targetpython = False
     install_in_hostpython = False
 
     def prebuild_arch(self, arch):
         super().prebuild_arch(arch)
+
         with current_directory(self.get_build_dir(arch.arch)):
-            setup_template = open(join("buildconfig", "Setup.Android.SDL2.in")).read()
+            setup_template = open(
+                join("buildconfig", "Setup.Android.SDL2.in")
+            ).read()
+
             env = self.get_recipe_env(arch)
             env["ANDROID_ROOT"] = join(self.ctx.ndk.sysroot, "usr")
 
@@ -45,19 +54,27 @@ class PygameCeRecipe(CompiledComponentsPythonRecipe):
 
             setup_file = setup_template.format(
                 sdl_includes=(
-                    " -I" + join(self.ctx.bootstrap.build_dir, "jni", "SDL", "include")
-                    + " -L" + join(self.ctx.bootstrap.build_dir, "libs", str(arch))
-                    + " -L" + png_lib_dir
-                    + " -L" + jpeg_lib_dir
-                    + " -L" + arch.ndk_lib_dir_versioned
+                    " -I"
+                    + join(self.ctx.bootstrap.build_dir, "jni", "SDL", "include")
+                    + " -L"
+                    + join(self.ctx.bootstrap.build_dir, "libs", str(arch))
+                    + " -L"
+                    + png_lib_dir
+                    + " -L"
+                    + jpeg_lib_dir
+                    + " -L"
+                    + arch.ndk_lib_dir_versioned
                 ),
-                sdl_ttf_includes="-I" + join(self.ctx.bootstrap.build_dir, "jni", "SDL2_ttf"),
-                sdl_image_includes="-I" + join(self.ctx.bootstrap.build_dir, "jni", "SDL2_image", "include"),
+                sdl_ttf_includes="-I"
+                + join(self.ctx.bootstrap.build_dir, "jni", "SDL2_ttf"),
+                sdl_image_includes="-I"
+                + join(self.ctx.bootstrap.build_dir, "jni", "SDL2_image"),
                 sdl_mixer_includes=sdl_mixer_includes,
                 jpeg_includes="-I" + jpeg_inc_dir,
                 png_includes="-I" + png_inc_dir,
                 freetype_includes="",
             )
+
             open("Setup", "w").write(setup_file)
 
     def get_recipe_env(self, arch):
@@ -68,4 +85,4 @@ class PygameCeRecipe(CompiledComponentsPythonRecipe):
         return env
 
 
-recipe = PygameCeRecipe()
+recipe = Pygame2Recipe()
