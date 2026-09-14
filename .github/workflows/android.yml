@@ -27,8 +27,7 @@ jobs:
       - name: Install Linux dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y             git zip unzip autoconf automake libtool pkg-config             zlib1g-dev libncurses5-dev libncursesw5-dev libtinfo6             cmake libffi-dev libssl-dev gettext autopoint
-
+          sudo apt-get install -y     git zip unzip autoconf automake libtool libtool-bin pkg-config      zlib1g-dev libncurses5-dev libncursesw5-dev libtinfo6    cmake libffi-dev libssl-dev libreadline-dev gettext autopoint
       - name: Install Buildozer
         run: |
           python -m pip install --upgrade pip
