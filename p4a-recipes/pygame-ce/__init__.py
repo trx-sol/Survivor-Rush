@@ -30,7 +30,7 @@ class Pygame2Recipe(CompiledComponentsPythonRecipe):
         "png",
     ]
 
-    hostpython_prerequisites = ["Cython<3.1"]
+    hostpython_prerequisites = ["Cython<3.1","setuptools", "wheel"]
 
     call_hostpython_via_targetpython = False
     install_in_hostpython = False
