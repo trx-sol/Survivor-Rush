@@ -26,6 +26,7 @@ class Pygame2Recipe(CompiledComponentsPythonRecipe):
         "jpeg",
         "png",
     ]
+    hostpython_prerequisites = ["Cython<3.1"]
 
     call_hostpython_via_targetpython = False
     install_in_hostpython = False
