@@ -2,6 +2,7 @@ import os
 import re
 from os.path import join
 
+from pythonforandroid.logger import info, shprint
 from pythonforandroid.recipe import CompiledComponentsPythonRecipe
 from pythonforandroid.toolchain import current_directory
 
@@ -38,22 +39,11 @@ class Pygame2Recipe(CompiledComponentsPythonRecipe):
         super().prebuild_arch(arch)
 
         with current_directory(self.get_build_dir(arch.arch)):
-            # pygame-ce's pyproject.toml declares meson-python as its build
-            # backend. That's fine for normal PyPI wheel builds, but
-            # meson's compiler "sanity check" step *executes* a freshly
-            # compiled test binary to confirm the compiler works -- and
-            # since we're cross-compiling arm64 binaries, the x86_64 CI
-            # host can't run that binary, so a later `pip install .` fails.
-            #
-            # We can't just delete pyproject.toml: setup.py itself (used
-            # successfully below via build_ext) reads the version string
-            # out of its [project] table at import time. So instead we
-            # strip out only the [build-system] table. With no
-            # build-backend declared, pip falls back to the plain
-            # setuptools-based legacy build for the later `pip install .`
-            # step -- the same path setup.py build_ext already uses -- and
-            # never touches Meson, while the [project] metadata
-            # get_version.py needs stays intact.
+            # Strip pygame-ce's [build-system] table so `pip install .`
+            # doesn't try to use meson-python (its compiler sanity check
+            # can't execute cross-compiled arm64 binaries on the x86_64
+            # CI host). setup.py's own version lookup only reads the
+            # [project] table, so it's untouched.
             pyproject_path = "pyproject.toml"
             if os.path.exists(pyproject_path):
                 with open(pyproject_path, "r") as f:
@@ -123,6 +113,30 @@ class Pygame2Recipe(CompiledComponentsPythonRecipe):
         env["PYGAME_CROSS_COMPILE"] = "TRUE"
         env["PYGAME_ANDROID"] = "TRUE"
         return env
+
+    def install_python_package(self, arch, name=None, env=None, is_dir=True):
+        # Override rather than using `setup_extra_args`, because that
+        # attribute also gets appended to the earlier `setup.py build_ext`
+        # call (which doesn't understand pip-only flags and breaks).
+        #
+        # `--no-use-pep517` skips pip's "get requirements to build wheel"
+        # step entirely -- the step that was spinning up a fresh, isolated
+        # build venv with no Cython in it and reproducing the original
+        # "You need cython" error. `--no-build-isolation` reinforces that:
+        # everything runs directly in hostpython3's real environment,
+        # where `hostpython_prerequisites` already put Cython.
+        if env is None:
+            env = self.get_recipe_env(arch)
+        info('Installing {} into site-packages'.format(self.name))
+        with current_directory(self.get_build_dir(arch.arch)):
+            shprint(
+                self._host_recipe.pip, 'install', '.',
+                '--compile',
+                '--no-use-pep517',
+                '--no-build-isolation',
+                '--target', self.ctx.get_python_install_dir(arch.arch),
+                _env=env,
+            )
 
 
 recipe = Pygame2Recipe()
