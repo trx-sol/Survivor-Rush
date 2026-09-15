@@ -1,3 +1,4 @@
+import os
 from os.path import join
 
 from pythonforandroid.recipe import CompiledComponentsPythonRecipe
@@ -26,9 +27,11 @@ class Pygame2Recipe(CompiledComponentsPythonRecipe):
         "jpeg",
         "png",
     ]
-    hostpython_prerequisites = ["Cython<3.1"]
-    setup_extra_args = ["--no-use-pep517", "--no-build-isolation"]
 
+    # Makes Cython importable by the hostpython3 interpreter that runs
+    # `setup.py build_ext` during cross-compilation (fixed the original
+    # "You need cython" error).
+    hostpython_prerequisites = ["Cython<3.1"]
 
     call_hostpython_via_targetpython = False
     install_in_hostpython = False
@@ -37,6 +40,22 @@ class Pygame2Recipe(CompiledComponentsPythonRecipe):
         super().prebuild_arch(arch)
 
         with current_directory(self.get_build_dir(arch.arch)):
+            # pygame-ce ships a pyproject.toml that declares meson-python as
+            # its build backend. That's used for normal PyPI wheel builds,
+            # but meson-python's setup step runs a compiler "sanity check"
+            # that *executes* a freshly compiled test binary -- which fails
+            # here because we're cross-compiling arm64 binaries and the
+            # x86_64 CI host can't run them.
+            #
+            # pygame-ce's legacy setup.py (which builds everything
+            # successfully via `build_ext` below, with no involvement from
+            # pyproject.toml at all) doesn't have this problem. Removing
+            # pyproject.toml makes pip fall back to that legacy path for the
+            # later `pip install .` step too -- with no extra CLI flags
+            # needed anywhere, so nothing leaks into the build_ext call.
+            if os.path.exists("pyproject.toml"):
+                os.rename("pyproject.toml", "pyproject.toml.disabled")
+
             setup_template = open(
                 join("buildconfig", "Setup.Android.SDL2.in")
             ).read()
