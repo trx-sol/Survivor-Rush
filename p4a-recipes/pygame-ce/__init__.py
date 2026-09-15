@@ -27,6 +27,8 @@ class Pygame2Recipe(CompiledComponentsPythonRecipe):
         "png",
     ]
     hostpython_prerequisites = ["Cython<3.1"]
+    setup_extra_args = ["--no-use-pep517", "--no-build-isolation"]
+
 
     call_hostpython_via_targetpython = False
     install_in_hostpython = False
