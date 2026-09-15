@@ -9,7 +9,7 @@ requirements = python3==3.11.9,hostpython3==3.11.9,pygame-ce==2.5.7
 orientation = landscape
 fullscreen = 1
 android.api = 36
-android.minapi = 24
+android.minapi = 26
 android.ndk = 28c
 android.archs = arm64-v8a
 android.accept_sdk_license = True
