@@ -1,4 +1,5 @@
 import os
+import re
 from os.path import join
 
 from pythonforandroid.recipe import CompiledComponentsPythonRecipe
@@ -28,9 +29,6 @@ class Pygame2Recipe(CompiledComponentsPythonRecipe):
         "png",
     ]
 
-    # Makes Cython importable by the hostpython3 interpreter that runs
-    # `setup.py build_ext` during cross-compilation (fixed the original
-    # "You need cython" error).
     hostpython_prerequisites = ["Cython<3.1"]
 
     call_hostpython_via_targetpython = False
@@ -40,21 +38,36 @@ class Pygame2Recipe(CompiledComponentsPythonRecipe):
         super().prebuild_arch(arch)
 
         with current_directory(self.get_build_dir(arch.arch)):
-            # pygame-ce ships a pyproject.toml that declares meson-python as
-            # its build backend. That's used for normal PyPI wheel builds,
-            # but meson-python's setup step runs a compiler "sanity check"
-            # that *executes* a freshly compiled test binary -- which fails
-            # here because we're cross-compiling arm64 binaries and the
-            # x86_64 CI host can't run them.
+            # pygame-ce's pyproject.toml declares meson-python as its build
+            # backend. That's fine for normal PyPI wheel builds, but
+            # meson's compiler "sanity check" step *executes* a freshly
+            # compiled test binary to confirm the compiler works -- and
+            # since we're cross-compiling arm64 binaries, the x86_64 CI
+            # host can't run that binary, so a later `pip install .` fails.
             #
-            # pygame-ce's legacy setup.py (which builds everything
-            # successfully via `build_ext` below, with no involvement from
-            # pyproject.toml at all) doesn't have this problem. Removing
-            # pyproject.toml makes pip fall back to that legacy path for the
-            # later `pip install .` step too -- with no extra CLI flags
-            # needed anywhere, so nothing leaks into the build_ext call.
-            if os.path.exists("pyproject.toml"):
-                os.rename("pyproject.toml", "pyproject.toml.disabled")
+            # We can't just delete pyproject.toml: setup.py itself (used
+            # successfully below via build_ext) reads the version string
+            # out of its [project] table at import time. So instead we
+            # strip out only the [build-system] table. With no
+            # build-backend declared, pip falls back to the plain
+            # setuptools-based legacy build for the later `pip install .`
+            # step -- the same path setup.py build_ext already uses -- and
+            # never touches Meson, while the [project] metadata
+            # get_version.py needs stays intact.
+            pyproject_path = "pyproject.toml"
+            if os.path.exists(pyproject_path):
+                with open(pyproject_path, "r") as f:
+                    pyproject_contents = f.read()
+
+                pyproject_contents = re.sub(
+                    r"\[build-system\].*?(?=\n\[)",
+                    "",
+                    pyproject_contents,
+                    flags=re.DOTALL,
+                )
+
+                with open(pyproject_path, "w") as f:
+                    f.write(pyproject_contents)
 
             setup_template = open(
                 join("buildconfig", "Setup.Android.SDL2.in")
