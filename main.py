@@ -21,10 +21,40 @@ try:
 except Exception:
     pass
 
-WIDTH, HEIGHT = 1100, 700
+# ---------- adaptive full-screen mobile resolution ----------
+# Keep the existing game coordinate system, but widen the logical viewport
+# to exactly match the real device aspect ratio. This avoids letterbox bars
+# while preserving proportions. The final logical frame is scaled uniformly
+# to the display height.
+real_screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
+DISPLAY_W, DISPLAY_H = real_screen.get_size()
+if DISPLAY_W <= 0 or DISPLAY_H <= 0:
+    DISPLAY_W, DISPLAY_H = 1100, 700
+
+HEIGHT = 700
+DISPLAY_ASPECT = DISPLAY_W / max(1, DISPLAY_H)
+WIDTH = max(1000, round(HEIGHT * DISPLAY_ASPECT))
+
 WORLD_W, WORLD_H = 3200, 2200
 FPS = 60
 camera = pygame.Vector2(0, 0)
+
+_scale = DISPLAY_H / HEIGHT
+_scaled_size = (DISPLAY_W, DISPLAY_H)
+_blit_pos = (0, 0)
+
+def to_logical(px, py):
+    """Convert real-screen pixel coordinates into logical game coordinates."""
+    return px / _scale, py / _scale
+
+screen = pygame.Surface((WIDTH, HEIGHT))
+pygame.display.set_caption("Survivor Rush V6")
+clock = pygame.time.Clock()
+
+FONT = pygame.font.SysFont("arial", 22, bold=True)
+SMALL = pygame.font.SysFont("arial", 17, bold=True)
+BIG = pygame.font.SysFont("arial", 46, bold=True)
+TITLE = pygame.font.SysFont("arial", 72, bold=True)
 
 # ---------- worlds ----------
 # Distinct stages the game cycles through: each has its own map size, color
@@ -93,14 +123,6 @@ ROUND_LENGTH = 60.0
 ROUND_BOSS_TIME = 50.0
 BOSS_GUARD_RADIUS = 360.0
 PORTAL_RADIUS = 48.0
-screen = pygame.display.set_mode((WIDTH, HEIGHT))
-pygame.display.set_caption("Survivor Rush V5")
-clock = pygame.time.Clock()
-
-FONT = pygame.font.SysFont("arial", 22, bold=True)
-SMALL = pygame.font.SysFont("arial", 17, bold=True)
-BIG = pygame.font.SysFont("arial", 46, bold=True)
-TITLE = pygame.font.SysFont("arial", 72, bold=True)
 
 # ---------- sound ----------
 def tone(freq, duration=0.07, volume=0.20):
@@ -160,15 +182,28 @@ def draw_heart(cx, cy, size, color, outline=None):
     if outline:
         pygame.draw.polygon(screen, outline, points, 2)
 
+# Cache glow surfaces by (radius, color, alpha) instead of rebuilding a
+# fresh SRCALPHA surface with 5 blended circles every single call, every
+# frame. This was the main source of frame-rate dips (and therefore the
+# perceived player "slowdown", since dt is capped and can't compensate for
+# slow frames) -- it got worse near the boss because the boss and portal
+# both draw large glow radii every frame once the boss spawns, on top of
+# every enemy's own glow.
+_glow_cache = {}
+
 def circle_glow(pos, radius, color, alpha=45):
     r = max(1, int(radius))
-    s = pygame.Surface((r*4, r*4), pygame.SRCALPHA)
-    for k in range(5, 0, -1):
-        rr = int(r * (k / 3))
-        a = max(1, alpha // k)
-        pygame.draw.circle(s, (*color, a), (r*2, r*2), rr)
+    key = (r, color, alpha)
+    surf = _glow_cache.get(key)
+    if surf is None:
+        surf = pygame.Surface((r*4, r*4), pygame.SRCALPHA)
+        for k in range(5, 0, -1):
+            rr = int(r * (k / 3))
+            a = max(1, alpha // k)
+            pygame.draw.circle(surf, (*color, a), (r*2, r*2), rr)
+        _glow_cache[key] = surf
     sx, sy = world_to_screen(pos[0], pos[1])
-    screen.blit(s, (sx-r*2, sy-r*2))
+    screen.blit(surf, (sx-r*2, sy-r*2))
 
 # ---------- particles ----------
 particles = []
@@ -716,19 +751,70 @@ def choose_upgrade(idx):
     choices = []
     state="playing"
 
-# ---------- joystick ----------
-joy_center=pygame.Vector2(95,HEIGHT-90)
+# ---------- mobile controls ----------
+# Controls are kept in logical coordinates, so their physical size grows
+# naturally with the device scale.
+JOY_RADIUS = 82
+JOY_KNOB_RADIUS = 38
+JOY_TOUCH_RADIUS = 120
+joy_center=pygame.Vector2(115,HEIGHT-105)
 joy_pos=joy_center.copy()
 joy_active=False
+joy_finger_id=None
+joy_vector=pygame.Vector2(0,0)
+
+DASH_RADIUS = 58
+dash_center=pygame.Vector2(WIDTH-115,HEIGHT-105)
+dash_pressed=False
 
 def get_joy():
-    global joy_pos
+    global joy_pos, joy_vector
     if not joy_active:
         joy_pos=joy_center.copy()
-        return pygame.Vector2(0,0)
+        # Smoothly return the movement vector to zero.
+        joy_vector *= 0.72
+        if joy_vector.length_squared() < 0.0004:
+            joy_vector.update(0,0)
+        return joy_vector.copy()
+
     d=joy_pos-joy_center
-    if d.length()>55: d.scale_to_length(55)
-    return d/55
+    if d.length()>JOY_RADIUS:
+        d.scale_to_length(JOY_RADIUS)
+
+    target=d/JOY_RADIUS
+    # Smooth joystick input to reduce Android touch jitter.
+    joy_vector += (target-joy_vector)*0.35
+    return joy_vector.copy()
+
+def dash_rect():
+    return pygame.Rect(
+        int(dash_center.x-DASH_RADIUS),
+        int(dash_center.y-DASH_RADIUS),
+        int(DASH_RADIUS*2),
+        int(DASH_RADIUS*2),
+    )
+
+def draw_mobile_controls():
+    # Joystick
+    pygame.draw.circle(screen,(20,25,38),
+                       (int(joy_center.x),int(joy_center.y)),JOY_RADIUS)
+    pygame.draw.circle(screen,(65,80,105),
+                       (int(joy_center.x),int(joy_center.y)),JOY_RADIUS,3)
+    p=joy_pos if joy_active else joy_center
+    pygame.draw.circle(screen,(80,120,160),
+                       (int(p.x),int(p.y)),JOY_KNOB_RADIUS)
+    pygame.draw.circle(screen,(125,165,205),
+                       (int(p.x),int(p.y)),JOY_KNOB_RADIUS,3)
+
+    # Dash button
+    pygame.draw.circle(screen,(35,45,65),
+                       (int(dash_center.x),int(dash_center.y)),DASH_RADIUS)
+    pygame.draw.circle(screen,(100,150,205),
+                       (int(dash_center.x),int(dash_center.y)),DASH_RADIUS,3)
+    if player.dash_cd <= 0:
+        text("DASH",dash_center,(120,220,255),SMALL,True)
+    else:
+        text(f"{player.dash_cd:.1f}",dash_center,(150,165,185),SMALL,True)
 
 # ---------- menus ----------
 def button(rect,label,enabled=True):
@@ -832,12 +918,19 @@ def draw_effects():
 
 # ---------- Android touch support ----------
 def finger_pos(event):
-    return int(event.x * WIDTH), int(event.y * HEIGHT)
+    # event.x / event.y are normalized [0, 1] across the *real* device
+    # window (including any letterbox bars), so convert through real
+    # screen pixels first, then into logical game coordinates.
+    px = event.x * DISPLAY_W
+    py = event.y * DISPLAY_H
+    return to_logical(px, py)
 
 # ---------- main loop ----------
 running=True
 while running:
-    dt=min(clock.tick(FPS)/1000, .033)
+    # Keep movement time-based. A small upper clamp prevents a long pause
+    # (for example when Android resumes the app) from causing a huge jump.
+    dt=min(clock.tick(FPS)/1000, .050)
     for event in pygame.event.get():
         if event.type==pygame.QUIT:
             running=False
@@ -850,7 +943,7 @@ while running:
 
         if event.type==pygame.FINGERDOWN:
             mx, my = finger_pos(event)
-            event_pos = (mx, my)
+
             if state=="menu":
                 if button((WIDTH//2-130,310,260,58),"PLAY").collidepoint(mx,my):
                     reset_run()
@@ -858,6 +951,7 @@ while running:
                     state="shop"
                 elif button((WIDTH//2-130,460,260,58),"QUIT").collidepoint(mx,my):
                     running=False
+
             elif state=="shop":
                 if button((WIDTH//2-220,210,200,55),"DAMAGE  50").collidepoint(mx,my) and save["coins"]>=50:
                     save["coins"]-=50; save["damage"]+=1
@@ -867,31 +961,45 @@ while running:
                     save["coins"]-=50; save["speed"]+=1
                 if button((WIDTH//2-130,510,260,55),"BACK").collidepoint(mx,my):
                     state="menu"
+
             elif state=="levelup":
                 for i in range(3):
                     r=pygame.Rect(90+i*330,270,290,150)
                     if r.collidepoint(mx,my):
                         choose_upgrade(i)
+
             elif state in ("gameover","win"):
                 if button((WIDTH//2-130,440,260,58),"PLAY AGAIN").collidepoint(mx,my):
                     reset_run()
                 if button((WIDTH//2-130,510,260,58),"MENU").collidepoint(mx,my):
                     state="menu"
-            elif state=="playing":
-                if math.hypot(mx-joy_center.x,my-joy_center.y)<100 and my>HEIGHT-190:
-                    joy_active=True
-                    joy_pos=pygame.Vector2(mx,my)
 
-        if event.type==pygame.FINGERMOTION and joy_active:
-            mx, my = finger_pos(event)
-            joy_pos=pygame.Vector2(mx,my)
+            elif state=="playing":
+                # The left touch controls movement; the right touch control
+                # triggers dash. Track the finger so a second finger cannot
+                # accidentally take over or release the joystick.
+                if math.hypot(mx-joy_center.x,my-joy_center.y) < JOY_TOUCH_RADIUS and my > HEIGHT-210:
+                    if joy_finger_id is None:
+                        joy_finger_id = event.finger_id
+                        joy_active=True
+                        joy_pos=pygame.Vector2(mx,my)
+                elif math.hypot(mx-dash_center.x,my-dash_center.y) <= DASH_RADIUS*1.35:
+                    player.dash()
+                    dash_pressed=True
+
+        if event.type==pygame.FINGERMOTION:
+            if joy_active and event.finger_id == joy_finger_id:
+                mx, my = finger_pos(event)
+                joy_pos=pygame.Vector2(mx,my)
 
         if event.type==pygame.FINGERUP:
-            joy_active=False
-            joy_pos=joy_center.copy()
+            if event.finger_id == joy_finger_id:
+                joy_active=False
+                joy_finger_id=None
+                joy_pos=joy_center.copy()
 
         if event.type==pygame.MOUSEBUTTONDOWN:
-            mx,my=event.pos
+            mx,my=to_logical(*event.pos)
             if state=="menu":
                 if button((WIDTH//2-130,310,260,58),"PLAY").collidepoint(mx,my):
                     reset_run()
@@ -919,12 +1027,14 @@ while running:
                 if button((WIDTH//2-130,510,260,58),"MENU").collidepoint(mx,my):
                     state="menu"
             elif state=="playing":
-                if math.hypot(mx-joy_center.x,my-joy_center.y)<80 and my>HEIGHT-180:
+                if math.hypot(mx-joy_center.x,my-joy_center.y)<JOY_TOUCH_RADIUS and my>HEIGHT-210:
                     joy_active=True
                     joy_pos=pygame.Vector2(mx,my)
+                elif math.hypot(mx-dash_center.x,my-dash_center.y)<=DASH_RADIUS*1.35:
+                    player.dash()
 
         if event.type==pygame.MOUSEMOTION and joy_active:
-            joy_pos=pygame.Vector2(event.pos)
+            joy_pos=pygame.Vector2(to_logical(*event.pos))
 
         if event.type==pygame.MOUSEBUTTONUP:
             joy_active=False
@@ -1223,7 +1333,7 @@ while running:
         player.draw()
         draw_effects()
         draw_hud()
-        draw_joystick()
+        draw_mobile_controls()
 
         if round_banner > 0:
             alpha = min(255, int(round_banner/3.0*255))
@@ -1265,6 +1375,15 @@ while running:
         button((WIDTH//2-130,440,260,58),"PLAY AGAIN")
         button((WIDTH//2-130,510,260,58),"MENU")
 
+    # The logical surface is sized to the device aspect ratio, so this is
+    # a uniform scale with no letterbox bars and no aspect-ratio distortion.
+    # Use the faster scale operation on Android; smoothscale here costs a
+    # full-frame high-quality resize every frame.
+    if _scale == 1.0 and screen.get_size() == real_screen.get_size():
+        real_screen.blit(screen, (0,0))
+    else:
+        scaled = pygame.transform.scale(screen, _scaled_size)
+        real_screen.blit(scaled, _blit_pos)
     pygame.display.flip()
 
 pygame.quit()
