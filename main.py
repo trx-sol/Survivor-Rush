@@ -51,10 +51,10 @@ screen = pygame.Surface((WIDTH, HEIGHT))
 pygame.display.set_caption("Survivor Rush V6")
 clock = pygame.time.Clock()
 
-FONT = pygame.font.SysFont("arial", 22, bold=True)
-SMALL = pygame.font.SysFont("arial", 17, bold=True)
-BIG = pygame.font.SysFont("arial", 46, bold=True)
-TITLE = pygame.font.SysFont("arial", 72, bold=True)
+FONT = pygame.font.Font(None, 22)
+SMALL = pygame.font.Font(None, 17)
+BIG = pygame.font.Font(None, 46)
+TITLE = pygame.font.Font(None, 72)
 
 # ---------- worlds ----------
 # Distinct stages the game cycles through: each has its own map size, color
